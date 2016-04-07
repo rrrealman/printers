@@ -38,7 +38,7 @@ class USBPrinter(object):
         #self.PJLCmd("INFO USTATUS")
         
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        for exceptionNum in xrange(10):
+        for exceptionNum in range(10):
             try:
                 infoSuppl = {attrt[0]: attrt[1] for attrt in (attr.split(" = ") for attr in self.PJLCmd("INFO SUPPLIES"))}
                 infoStatus = {attrt[0]: attrt[1] for attrt in (attr.split("=") for attr in self.PJLCmd("INFO STATUS"))}
@@ -46,8 +46,10 @@ class USBPrinter(object):
                 break
                 print("[+] Printer data read successfully")
             except:
-                if exceptionNum == 9: print("[-] Unable to read printer data")
-                pass     
+                if exceptionNum == 9: 
+                    print("[-] Unable to read printer data")
+                    return None
+                
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
         self.status["SERIAL_NUMBER"] = infoSuppl["SerialNumber"]
@@ -82,27 +84,25 @@ class USBPrinters(object):
                     return True
             return False
         
-    def __init__(self):
+    def __init__(self, _serverURL = "http://192.168.41.62:8080/printer"):
         printerDeviceClass = 7
-        printersFounded = usb.core.find(find_all = True, custom_match = self.findDeviceClass(printerDeviceClass)) #generator object
-        self.serverURL = "http://192.168.41.62:8080/printer"
-        print(printersFounded)
-        if printersFounded:#!!!
-            self.printers = [USBPrinter(printer) for printer in printersFounded]
-            print("[+] {0} printers were found on host".format(len(self.printers))) # if printer 1 !!!
-        else:
-            print("[-] Printers were not found on host")
+        self.serverURL = _serverURL
+        self.printers = [USBPrinter(printer) for printer in usb.core.find(find_all = True, custom_match = self.findDeviceClass(printerDeviceClass))]
+        print("[+] {0} printers were found on host".format(len(self.printers)) if self.printers else "[-] Printers were not found on host")
 
     def sendReport(self):
-        printersStatus = [printer.refreshStatus() for printer in self.printers]
-        allHostIPs = [addr[4][0] for addr in socket.getaddrinfo(socket.gethostname(), None)]
-        currentDate = datetime.isoformat(datetime.now()) #'2016.03.2810:35:15+0300' !!!
-        jsonToSend = {"ip": allHostIPs, "currentDate": currentDate, "printers": printersStatus} #json
-        print("[+] JSON to sending: {0}".format(jsonToSend))
-        response = requests.post(self.serverURL, json = jsonToSend)
-        print(response.text)
-        print(("[+] JSON sended successfully " if response.status_code == 200 else "[-] JSON could not be sended ") + str(response.status_code))
-
+        printersStatus = [status for status in (printer.refreshStatus() for printer in self.printers) if status is not None]
+        if printersStatus:
+            printersStatus = [printer.refreshStatus() for printer in self.printers]
+            allHostIPs = [addr[4][0] for addr in socket.getaddrinfo(socket.gethostname(), None)]
+            currentDate = datetime.isoformat(datetime.now())
+            jsonToSend = {"ip": allHostIPs, "currentDate": currentDate, "printers": printersStatus} #json
+            print("[+] JSON to sending: {0}".format(jsonToSend))
+            #response = requests.post(self.serverURL, json = jsonToSend)
+            #print(response.text)
+            #print(("[+] JSON sended successfully " if response.status_code == 200 else "[-] JSON was not be sended ") + str(response.status_code))
+        else: print("[-] JSON won't be sended: Nothing to send")
+         
 def main():
     
     printers = USBPrinters()
